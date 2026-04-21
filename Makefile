@@ -1,4 +1,4 @@
-.PHONY: help install dev lint format test clean run web cli ingest
+.PHONY: help install dev lint format test clean run web cli ingest ingest-portfolio
 
 # Ensure poetry is in PATH (handles cases where ~/.local/bin isn't in make's PATH)
 export PATH := $(HOME)/.local/bin:$(PATH)
@@ -24,6 +24,8 @@ help:
 	@echo ""
 	@echo "Data:"
 	@echo "  make ingest      Ingest news into vector store"
+	@echo "  make ingest-portfolio  Ingest latest news for your Kite portfolio holdings"
+	@echo "                          (optionally override LIMIT, e.g. LIMIT=20)"
 	@echo "  make qdrant      Start Qdrant vector database (Docker)"
 	@echo ""
 	@echo "Utilities:"
@@ -78,6 +80,11 @@ check: lint typecheck test
 
 ingest:
 	poetry run python -c "import asyncio; from src.data.ingestion import ingest_news; asyncio.run(ingest_news())"
+
+# Ingest latest news for all portfolio stocks (from Kite holdings).
+# Note: "all news" isn't feasible; this ingests the latest `LIMIT` articles per source per symbol.
+ingest-portfolio:
+	PYTHONPATH=$(PWD) poetry run python scripts/ingest_portfolio_news.py $(LIMIT)
 
 qdrant:
 	docker run -p 6333:6333 -v $(PWD)/data/vector_store:/qdrant/storage qdrant/qdrant

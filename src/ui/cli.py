@@ -224,6 +224,59 @@ async def handle_ingest(_client: KiteClient, _assistant: PortfolioAssistant) -> 
         console.print(f"  [yellow]Errors: {len(stats.errors)}[/yellow]")
 
 
+async def handle_ingest_portfolio(client: KiteClient, _assistant: PortfolioAssistant) -> None:
+    """Ingest latest news for all currently held portfolio symbols."""
+    from src.data.ingestion import ingest_news
+
+    with console.status("[bold green]Fetching portfolio holdings from Kite..."):
+        holdings = await run_with_error_handling(
+            client.get_holdings(),
+            "fetching portfolio holdings",
+        )
+
+    if holdings is None:
+        return
+
+    symbols = sorted(
+        {
+            (h.get("tradingsymbol") or "").upper().strip()
+            for h in holdings
+            if (h.get("tradingsymbol") or "").strip()
+        }
+    )
+
+    if not symbols:
+        console.print("[yellow]No portfolio symbols found in holdings.[/yellow]")
+        return
+
+    limit_input = Prompt.ask(
+        "Articles per source per symbol",
+        default="10",
+    )
+
+    try:
+        limit = int(limit_input)
+    except ValueError:
+        limit = 10
+
+    console.print(
+        f"\n[bold]Portfolio symbols:[/bold] {', '.join(symbols)}"
+    )
+
+    with console.status("[bold green]Fetching and indexing portfolio news..."):
+        stats = await ingest_news(symbols=symbols, limit=limit)
+
+    console.print("\n[green]Portfolio news ingestion complete![/green]")
+    console.print(f"  Symbols processed: {len(symbols)}")
+    console.print(f"  Articles fetched: {stats.articles_fetched}")
+    console.print(f"  Chunks stored: {stats.chunks_stored}")
+
+    if stats.errors:
+        console.print(f"  [yellow]Errors: {len(stats.errors)}[/yellow]")
+        for err in stats.errors[:5]:
+            console.print(f"    - {err}")
+
+
 async def handle_search(_client: KiteClient, _assistant: PortfolioAssistant) -> None:
     """Search news in vector store."""
     from src.rag.retriever import get_retriever
@@ -492,6 +545,7 @@ def show_help() -> None:
   fundamentals - Run fundamental analysis (screener.in)
   events      - Show corporate events from BSE (board meetings, dividends, etc.)
   ingest      - Fetch and index news articles
+  ingest-portfolio - Fetch and index latest news for your current holdings
   search      - Search indexed news articles
   status      - Show vector store status
   tools       - List available MCP tools
@@ -618,6 +672,7 @@ async def async_main(args: argparse.Namespace) -> None:
         "events": handle_events,
         "tools": handle_tools,
         "ingest": handle_ingest,
+        "ingest-portfolio": handle_ingest_portfolio,
         "search": handle_search,
         "status": handle_status,
         "clear": handle_clear,
