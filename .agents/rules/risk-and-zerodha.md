@@ -2,14 +2,15 @@
 trigger: glob
 description: Exact Zerodha Kite MCP, NSE tick-size, GTT Clause 1.6, dual-cap position sizing, and data-pacing rules for India CNC dip investing.
 globs:
-  - "src/broker/"
-  - "src/risk/"
-  - "src/technicals/"
-  - "src/data/"
-  - "src/graph/"
-  - "src/scheduler/"
-  - "src/storage/"
-  - "tests/"
+  - "src/broker/**"
+  - "src/risk/**"
+  - "src/technicals/**"
+  - "src/data/**"
+  - "src/agents/workflows/**"
+  - "src/scheduler/**"
+  - "src/storage/**"
+  - "tests/**"
+  - "src/config/**"
 ---
 
 # Zerodha Kite MCP, NSE & RiskGuard Specifications

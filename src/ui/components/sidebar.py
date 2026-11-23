@@ -2,6 +2,7 @@
 
 import streamlit as st
 
+from src.config.settings import get_settings
 from src.mcp.kite_client import KiteClient
 from src.ui.components.login import render_login
 from src.ui.components.portfolio_display import render_portfolio_summary
@@ -10,6 +11,18 @@ from src.ui.utils.session import SessionManager
 
 # Quick action definitions with their agent types
 QUICK_ACTIONS = [
+    {
+        "label": "Scan Dip Setups",
+        "icon": "🎯",
+        "agent": "technical_dip_scan",
+        "prompt": "Scan for dip setups on NIFTY50",
+    },
+    {
+        "label": "Review Stop-Losses",
+        "icon": "🛡️",
+        "agent": "stop_loss_review",
+        "prompt": "Review my active stop loss GTT orders",
+    },
     {
         "label": "Analyze Portfolio",
         "icon": "📊",
@@ -51,8 +64,18 @@ def render_sidebar(kite_client: KiteClient) -> None:
     """
     with st.sidebar:
         # App title - use markdown for better theme compatibility
-        st.markdown("## 📈 Portfolio Copilot")
-        st.markdown("*AI-powered portfolio analysis*")
+        st.markdown("## 📈 Zerodha Dip Copilot")
+        st.markdown("*CNC Dip-Buying & GTT Stop-Loss Assistant*")
+
+        # Safety & DDPI Badges
+        settings = get_settings()
+        if settings.dry_run:
+            st.info("🛡️ **DRY RUN**: Simulated GTT Execution")
+        else:
+            st.error("🚨 **LIVE TRADING**: Real GTT Placement Active")
+
+        if not settings.zerodha_ddpi_enabled:
+            st.warning("⚠️ **DDPI Disabled**: Triggered Sell OCO stop-losses require daily CDSL TPIN authorization.")
 
         st.markdown("---")
 

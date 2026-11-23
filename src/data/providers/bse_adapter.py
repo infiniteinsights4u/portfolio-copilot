@@ -41,12 +41,30 @@ class BSEEventsAdapter(CorporateEventsProvider):
         scraper = await self._get_scraper()
 
         try:
-            events: list[CorporateEvent] = await scraper.get_announcements(clean_symbol, days_back=days_back)
+            if hasattr(scraper, "get_corporate_events"):
+                events = await scraper.get_corporate_events(clean_symbol, limit=days_back)
+            elif hasattr(scraper, "get_announcements"):
+                events = await scraper.get_announcements(clean_symbol, days_back=days_back)
+            else:
+                events = []
             results = []
             for ev in events:
-                data = dataclasses.asdict(ev)
-                if isinstance(data.get("date"), Any) and hasattr(data["date"], "isoformat"):
+                if dataclasses.is_dataclass(ev):
+                    data = dataclasses.asdict(ev)
+                elif isinstance(ev, dict):
+                    data = dict(ev)
+                else:
+                    data = {
+                        "title": getattr(ev, "title", ""),
+                        "category": getattr(ev, "category", ""),
+                        "date": getattr(ev, "date", None),
+                        "url": getattr(ev, "url", ""),
+                        "symbol": getattr(ev, "symbol", clean_symbol),
+                    }
+                if data.get("date") is not None and hasattr(data["date"], "isoformat"):
                     data["date"] = data["date"].isoformat()
+                elif data.get("date") is not None and hasattr(data["date"], "strftime"):
+                    data["date"] = data["date"].strftime("%Y-%m-%d")
                 results.append(data)
             return results
         except Exception as e:

@@ -120,12 +120,14 @@ class DurableSqliteSaver(
                 self.db_path,
                 check_same_thread=False,
                 autocommit=True,
+                timeout=60.0,
             )
             self._conn.row_factory = sqlite3.Row
             if self.db_path != ":memory:":
                 try:
                     self._conn.execute("PRAGMA journal_mode=WAL;")
                     self._conn.execute("PRAGMA synchronous=NORMAL;")
+                    self._conn.execute("PRAGMA busy_timeout=60000;")
                 except Exception:
                     pass
         return self._conn

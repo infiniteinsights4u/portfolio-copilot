@@ -12,6 +12,7 @@ from rich.markdown import Markdown
 from rich.prompt import Prompt
 from rich.table import Table
 
+from src.config.settings import get_settings
 from src.core.config import get_config, set_provider
 from src.core.logging import setup_logging
 from src.llm.claude import PortfolioAssistant
@@ -42,6 +43,40 @@ def parse_args() -> argparse.Namespace:
         "--debug",
         action="store_true",
         help="Enable debug logging (shows raw API data)",
+    )
+
+    # Dip Copilot & Safety flags
+    parser.add_argument(
+        "--dry-run",
+        dest="dry_run",
+        action="store_true",
+        default=None,
+        help="Enable dry-run mode (default: True, no live orders placed)",
+    )
+    parser.add_argument(
+        "--no-dry-run",
+        dest="dry_run",
+        action="store_false",
+        help="Disable dry-run mode (LIVE GTT writes enabled)",
+    )
+
+    parser.add_argument(
+        "--kite-mcp-url",
+        help="Zerodha Kite MCP server URL (default: https://mcp.kite.trade/mcp or local failover)",
+    )
+
+    parser.add_argument(
+        "--zerodha-ddpi-enabled",
+        dest="zerodha_ddpi_enabled",
+        action="store_true",
+        default=None,
+        help="Specify that Zerodha DDPI/POA is active for automated CNC sell GTT execution",
+    )
+    parser.add_argument(
+        "--no-zerodha-ddpi-enabled",
+        dest="zerodha_ddpi_enabled",
+        action="store_false",
+        help="Specify that Zerodha DDPI/POA is not active (requires daily CDSL authorization)",
     )
 
     return parser.parse_args()
@@ -638,7 +673,18 @@ async def async_main(args: argparse.Namespace) -> None:
     # Setup structured logging
     setup_logging(debug=args.debug, json_output=False)
 
-    # Apply CLI overrides to config
+    # Apply CLI overrides to config and settings
+    cli_overrides: dict[str, Any] = {}
+    if getattr(args, "dry_run", None) is not None:
+        cli_overrides["dry_run"] = args.dry_run
+    if getattr(args, "kite_mcp_url", None):
+        cli_overrides["kite_mcp_url"] = args.kite_mcp_url
+    if getattr(args, "zerodha_ddpi_enabled", None) is not None:
+        cli_overrides["zerodha_ddpi_enabled"] = args.zerodha_ddpi_enabled
+
+    if cli_overrides:
+        get_settings(force_reload=True, **cli_overrides)
+
     if args.provider:
         set_provider(args.provider, args.model)
     elif args.model:
@@ -646,17 +692,21 @@ async def async_main(args: argparse.Namespace) -> None:
         config = get_config()
         set_provider(config.provider, args.model)
 
-    # Show provider info
+    # Show provider & safety info
     config = get_config()
+    settings = get_settings()
     provider_info = f"[dim]Using {config.provider}"
     if config.provider == "ollama":
         provider_info += f" ({config.ollama_model})"
     else:
         provider_info += f" ({config.claude_model})"
+    provider_info += f" | DRY_RUN={'ON' if settings.dry_run else 'OFF'}"
+    provider_info += f" | DDPI={'ENABLED' if settings.zerodha_ddpi_enabled else 'DISABLED'}"
     provider_info += "[/dim]"
 
-    console.print("[bold green]Portfolio Copilot[/bold green]")
+    console.print("[bold green]Zerodha Dip-Buying & Stop-Loss Copilot[/bold green]")
     console.print(provider_info)
+    settings.check_ddpi_status()
     console.print("Type 'help' for commands, or ask me about your portfolio!\n")
 
     # Command handlers

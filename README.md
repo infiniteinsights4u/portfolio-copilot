@@ -1,234 +1,84 @@
-# Portfolio Copilot
+# Zerodha CNC Dip-Buying & GTT Stop-Loss Copilot
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Ollama](https://img.shields.io/badge/LLM-Ollama-white.svg)](https://ollama.ai/)
 [![Anthropic Claude](https://img.shields.io/badge/LLM-Claude-orange.svg)](https://www.anthropic.com/)
-[![Zerodha Kite](https://img.shields.io/badge/Broker-Zerodha%20Kite-red.svg)](https://kite.zerodha.com/)
+[![Zerodha Kite MCP](https://img.shields.io/badge/Broker-Zerodha%20Kite%20MCP-red.svg)](https://kite.zerodha.com/)
 
-> Ask questions about your portfolio in plain English. Get intelligent analysis powered by multiple LLM providers.
+> A personal algorithmic investing assistant for Indian equity (`CNC` cash delivery) dip-buying and Stage-2 Sell OCO stop-loss protection via Zerodha Kite MCP and LangGraph Human-in-the-Loop (HITL).
+> *Originally forked from [mohdasif2294/portfolio-copilot](https://github.com/mohdasif2294/portfolio-copilot).*
 
-![Web UI Screenshot](docs/images/web-ui.png)
+---
 
-## Features
+## Core Architecture & Safety Rules
 
-| | Feature | Description |
-|---|---------|-------------|
-| 📊 | **Portfolio Analysis** | Identify your best/worst performers with news context |
-| 🔍 | **Stock Research** | Get comprehensive research on any stock |
-| 📈 | **Market Context** | Understand why your portfolio moved today |
-| 💰 | **Fundamental Analysis** | Buy/hold/sell recommendations using screener.in data |
-| 👀 | **Watchlist Suggestions** | Discover stocks based on your investment style |
-| 📅 | **Corporate Events** | Board meetings, dividends, acquisitions, earnings from BSE |
+1. **Probabilistic Research vs. Deterministic Execution:** LLMs (Ollama local default or Anthropic Claude) synthesize research, fundamentals, and thesis generation. All share quantities, NSE tick-size roundings, Clause 1.6 trigger distances, and circuit clamps are calculated strictly in pure Python by `RiskGuard`.
+2. **Strict GTT-Only Brokerage Scope:** Writing is restricted strictly to GTT orders (`place_gtt_order`, `modify_gtt_order`, `delete_gtt_order`). `place_order`, `modify_order`, and `cancel_order` are prohibited at the MCP client layer, keeping workflows compliant and exempt from SEBI April 1, 2026 algo registration rules.
+3. **LangGraph Human-in-the-Loop (HITL) Gate:** Every proposed GTT order halts at an `interrupt()` barrier backed by a durable SQLite checkpointer (`DurableSqliteSaver` in WAL mode with `busy_timeout`). Live order execution is quarantined to a downstream node that executes only upon explicit user approval.
+4. **Safety Defaults:** `DRY_RUN=true` is enabled by default across all configs and test suites. Orders are validated and simulated safely without placing live orders on Zerodha.
+
+---
+
+## 6-Phase Architecture
+
+| Phase | Package | Description |
+|---|---|---|
+| **Phase 1: Kite MCP & Ledger** | `src/broker/`, `src/config/`, `src/storage/` | Streamable HTTP Kite MCP client with allowlist and backoff; `Settings` with `CLI > Env > .env` precedence; SQLite positions ledger & JSONL trade audit. |
+| **Phase 2: Compliant Data Layer** | `src/data/`, `src/technicals/` | NSE Bhavcopy join (`sec_bhavdata_full` + UDiFF); cached/paced Screener & BSE adapters; clean-room technical indicators (Wilder's RSI, 14-day ATR, 50/200-DMA, GMMA). |
+| **Phase 3: Deterministic RiskGuard** | `src/risk/` | Dual-cap position sizer (1% risk cap & 10% capital cap), Clause 1.6 distance check, dynamic NSE tick alignment, circuit clamps, and sector caps. |
+| **Phase 4: Durable HITL Workflow** | `src/agents/workflows/`, `src/ui/components/` | LangGraph workflow pausing at `interrupt()`; Streamlit interactive approval drawer supporting Approve / Edit / Reject. |
+| **Phase 5: IST Positional Scheduler** | `src/scheduler/` | Four IST schedules: 08:45 AM pre-market, 04:05 PM post-CAS reconciliation & Stage-2 OCO queuing, 06:15 PM EOD Bhavcopy dip scan, and Friday 04:15 PM digest. |
+| **Phase 6: EOD Backtest & Shadow Mode** | `src/backtest/`, `scripts/` | Split-adjusted offline backtest engine; Kite MCP local Go failover script & 2-week shadow-mode checklist. |
+
+---
 
 ## Quick Start
 
 ```bash
-# Clone and install
-git clone https://github.com/mohdasif2294/portfolio-copilot.git
-cd portfolio-copilot
+# 1. Install dependencies
 poetry install
 
-# Configure
+# 2. Configure environment
 cp .env.example .env
-# Edit .env to set your preferred LLM provider (see below)
+# DRY_RUN=true is enabled by default
 
-# Run
-make web    # Web interface at http://localhost:8501
-# or
-make cli    # Terminal interface
+# 3. Run Web Interface
+make web        # Streamlit web interface at http://localhost:8501
+
+# or Run CLI
+make cli        # Terminal interface with Rich formatting
 ```
 
-**Prerequisites:** Python 3.12+, [Poetry](https://python-poetry.org/docs/#installation)
+### Key Make Commands
 
-### LLM Provider Setup
-
-Choose between **Ollama** (local, free) or **Claude** (API, paid):
-
-#### Option 1: Ollama (Default - Local & Free)
-
-```bash
-# Install Ollama from https://ollama.ai
-ollama pull llama3
-
-# Run (uses Ollama by default)
-make cli
-```
-
-#### Option 2: Claude (Anthropic API)
-
-```bash
-# Set in .env
-LLM_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-xxx
-
-# Or use CLI flag
-python -m src.ui.cli --provider claude
-```
-
-#### CLI Options
-
-```bash
-# Use Ollama with a specific model
-python -m src.ui.cli --provider ollama --model llama3.1
-
-# Use Claude
-python -m src.ui.cli --provider claude
-
-# Override model
-python -m src.ui.cli --provider claude --model claude-sonnet-4-20250514
-```
+| Command | Description |
+|---|---|
+| `make web` | Start Streamlit web interface |
+| `make cli` | Start interactive Rich CLI interface |
+| `make scheduler` | Run the IST market scheduler daemon |
+| `make backtest` | Run split-adjusted EOD dip-buying backtest engine |
+| `make failover` | Run Kite MCP failover diagnostics and Go server switcher |
+| `make test` | Run pytest unit test suite across all modules |
+| `make check` | Run linter, typechecker, and unit tests |
 
 ---
 
-## Table of Contents
+## CLI Flags
 
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Screenshots](#screenshots)
-- [Usage](#usage)
-- [Agents](#agents)
-- [Architecture](#architecture)
-- [Tech Stack](#tech-stack)
-- [License](#license)
+```bash
+# Run CLI with custom LLM provider
+python -m src.ui.cli --provider claude --model claude-sonnet-4-20250514
 
-## Screenshots
+# Run CLI with live mode (requires manual 2FA OAuth)
+python -m src.ui.cli --no-dry-run
 
-### Web Interface
-
-![Web UI Screenshot](docs/images/web-ui.png)
-
-*Chat interface with suggested prompts, Kite login sidebar, and real-time responses*
-
-### CLI Interface
-
-![CLI Screenshot](docs/images/cli.png)
-
-*Terminal-based interface with rich formatting and command support*
-
-## Usage
-
-### Natural Language
-
-Just ask questions naturally - the system auto-detects intent:
-
+# Run CLI with custom Kite MCP URL
+python -m src.ui.cli --kite-mcp-url https://mcp.kite.trade/mcp
 ```
-You> What are my worst performing stocks?
-You> Tell me about Reliance
-You> Why is my portfolio down today?
-You> Is TCS a good buy?
-You> Suggest stocks for my watchlist
-You> Show events for Reliance
-You> Any board meetings for Infosys?
-```
-
-### Commands
-
-| Command | Description |
-|---------|-------------|
-| `login` | Connect to your Zerodha account |
-| `holdings` | View portfolio table |
-| `analyze` | Portfolio analysis |
-| `research` | Stock research |
-| `fundamentals` | Fundamental analysis |
-| `events` | Corporate events from BSE |
-| `ingest` | Index news articles |
-| `help` | Show all commands |
-
-## Agents
-
-The system uses specialized AI agents for different tasks:
-
-| Agent | What It Does |
-|-------|--------------|
-| 📊 **Portfolio Analysis** | Analyzes holdings, identifies best/worst performers, fetches relevant news |
-| 🔍 **Stock Research** | Researches individual stocks with price data, news, and your position |
-| 📈 **Market Context** | Explains why your portfolio moved using market news and trends |
-| 👀 **Watchlist Suggestion** | Recommends stocks based on your current sectors and blue chips |
-| 💰 **Fundamental Analysis** | Evaluates stocks using screener.in metrics (P/E, ROE, debt) with buy/hold/sell scores |
-| 📅 **Corporate Events** | Fetches board meetings, dividends, acquisitions, earnings announcements from BSE India |
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│              User Interface Layer                           │
-│  ┌─────────────────────┐    ┌─────────────────────┐         │
-│  │  Web UI (Streamlit) │    │   CLI (Rich)        │         │
-│  │  - Chat interface   │    │   - Commands        │         │
-│  │  - Suggested prompts│    │   - REPL interface  │         │
-│  │  - Login sidebar    │    │                     │         │
-│  └─────────────────────┘    └─────────────────────┘         │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-┌──────────────────────────▼──────────────────────────────────┐
-│                   Agent Orchestrator                        │
-│            (Query detection & routing)                      │
-└────────┬─────────────┬─────────────┬─────────────┬──────────┘
-         │             │             │             │
-         ▼             ▼             ▼             ▼
-┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐
-│ Portfolio │ │  Stock    │ │  Market   │ │Fundamental│ │  Stock    │
-│ Analysis  │ │ Research  │ │  Context  │ │ Analysis  │ │  Events   │
-│  Agent    │ │  Agent    │ │  Agent    │ │  Agent    │ │  Agent    │
-└───────────┘ └───────────┘ └───────────┘ └───────────┘ └───────────┘
-       │            │             │             │             │
-       └────────────┴──────┬──────┴─────────────┴─────────────┘
-                           │
-       ┌───────────────┬───┼──────────────-----------─┐
-       │               │              │               │
-       ▼               ▼              ▼               ▼
-┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-│  Kite MCP   │ │ RAG System  │ │ Screener.in │ │  BSE India  │
-│  (Holdings, │ │ (ChromaDB + │ │ (Fundamental│ │ (Corporate  │
-│   Quotes)   │ │  News)      │ │  Data)      │ │  Events)    │
-└─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘
-                              │
-                              ▼
-                    ┌─────────────────┐
-                    │   LLM Provider  │
-                    │  ┌───────────┐  │
-                    │  │  Ollama   │  │
-                    │  │ (Default) │  │
-                    │  └───────────┘  │
-                    │  ┌───────────┐  │
-                    │  │  Claude   │  │
-                    │  │ (Optional)│  │
-                    │  └───────────┘  │
-                    └─────────────────┘
-```
-
-## Tech Stack
-
-| Component | Technology |
-|-----------|------------|
-| Language | Python 3.12 |
-| LLM | Ollama (Llama 3) or Claude (Anthropic) |
-| Agent Framework | LangGraph |
-| Vector Database | ChromaDB |
-| Embeddings | Sentence Transformers (all-MiniLM-L6-v2) |
-| Broker Integration | Zerodha Kite MCP |
-| Web UI | Streamlit |
-| CLI | Rich |
-| Web Scraping | BeautifulSoup4, httpx |
-| Logging | structlog (structured events, console + JSON) |
-| Observability | LangSmith (LangGraph tracing), custom tracing decorators |
-| Market Data | BSE India API (corporate events) |
-| Symbol Resolution | NSE equity list (2200+ stocks, auto-cached) |
-
-## Why This Project?
-
-This is a learning project to understand modern AI systems:
-- **MCP (Model Context Protocol)** - Broker data integration
-- **RAG (Retrieval Augmented Generation)** - News context
-- **LangGraph** - Agentic workflows
-- **LLM Orchestration** - Tool calling and synthesis
-- **Multi-Provider Support** - Abstraction layer for local (Ollama) and API (Claude) models
 
 ---
 
 ## License
 
-Apache-2.0 License - see [LICENSE](LICENSE) for details.
-
-**Disclaimer:** This tool is for **educational purposes only**. It is NOT investment advice. Always consult a qualified financial advisor before making investment decisions.
+This project is licensed under the **Apache-2.0** License. See the [LICENSE](LICENSE) file for details.

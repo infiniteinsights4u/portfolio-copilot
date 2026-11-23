@@ -9,7 +9,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import END, StateGraph
 
 from src.agents.tools.symbol_tools import extract_symbol
-from src.data.scrapers.bse import BSEScraper
+from src.data.providers.bse_adapter import BSEEventsAdapter
 
 log = structlog.get_logger()
 
@@ -125,18 +125,21 @@ async def fetch_events_node(state: StockEventsState, config: RunnableConfig) -> 
     is_multi = len(symbols) > 1
     per_stock_limit = 5 if is_multi else 20
 
-    scraper = BSEScraper()
+    adapter = BSEEventsAdapter()
     try:
         all_events: list[dict] = []
         for sym in symbols:
-            raw_events = await scraper.get_corporate_events(sym, limit=per_stock_limit)
-            for e in raw_events:
+            raw_events = await adapter.get_corporate_events(sym, days_back=30)
+            for e in raw_events[:per_stock_limit]:
+                date_str = e.get("date", "N/A")
+                if hasattr(date_str, "strftime"):
+                    date_str = date_str.strftime("%Y-%m-%d")
                 all_events.append({
-                    "title": e.title,
-                    "category": e.category,
-                    "date": e.date.strftime("%Y-%m-%d") if e.date else "N/A",
-                    "url": e.url,
-                    "symbol": e.symbol,
+                    "title": e.get("title", ""),
+                    "category": e.get("category", ""),
+                    "date": str(date_str) if date_str else "N/A",
+                    "url": e.get("url", ""),
+                    "symbol": e.get("symbol", sym),
                 })
 
         if not all_events:

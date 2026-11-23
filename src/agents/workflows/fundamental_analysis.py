@@ -13,8 +13,10 @@ from src.agents.tools.news_tools import (
     search_stock_news,
 )
 from src.agents.tools.symbol_tools import extract_symbol
-from src.data.scrapers.screener import FundamentalData, get_stock_fundamentals
+from src.data.providers.screener_adapter import ScreenerAdapter
+from src.data.scrapers.screener import FundamentalData
 from src.mcp.kite_client import KiteClient
+from src.storage.ledger import SQLiteLedger
 
 
 def replace_value(current: Any, new: Any) -> Any:
@@ -327,8 +329,19 @@ async def extract_symbol_node(state: FundamentalAnalysisState) -> dict[str, Any]
     }
 
 
+_screener_adapter: ScreenerAdapter | None = None
+
+
+def get_screener_adapter() -> ScreenerAdapter:
+    """Get or create singleton ScreenerAdapter with SQLite quarterly caching."""
+    global _screener_adapter
+    if _screener_adapter is None:
+        _screener_adapter = ScreenerAdapter(ledger=SQLiteLedger())
+    return _screener_adapter
+
+
 async def fetch_fundamentals_node(state: FundamentalAnalysisState) -> dict[str, Any]:
-    """Node: Fetch fundamental data from screener.in."""
+    """Node: Fetch fundamental data using cached ScreenerAdapter."""
     symbol = state.get("symbol")
 
     if not symbol or state.get("error"):
@@ -336,7 +349,8 @@ async def fetch_fundamentals_node(state: FundamentalAnalysisState) -> dict[str, 
             "steps_completed": ["fetch_fundamentals"],
         }
 
-    fundamentals = await get_stock_fundamentals(symbol)
+    adapter = get_screener_adapter()
+    fundamentals = await adapter.get_fundamentals(symbol)
     score = analyze_fundamentals(fundamentals) if not fundamentals.error else FundamentalScore()
 
     return {

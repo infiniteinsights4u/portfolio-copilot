@@ -1,10 +1,14 @@
-"""Configuration management for LLM providers."""
+"""Configuration management for LLM providers and compatibility layer for application settings."""
+
+from __future__ import annotations
 
 import os
-from dataclasses import dataclass, field
-from typing import Final, Literal
+from dataclasses import dataclass
+from typing import Any, Final, Literal
 
 from dotenv import load_dotenv
+
+from src.config.settings import Settings, get_settings, load_settings
 
 load_dotenv()
 
@@ -37,26 +41,18 @@ class LLMConfig:
     claude_model: str = DEFAULT_CLAUDE_MODEL
 
     @classmethod
-    def from_env(cls) -> "LLMConfig":
-        """Load configuration from environment variables."""
-        provider = os.getenv(ENV_LLM_PROVIDER, DEFAULT_PROVIDER).lower()
+    def from_env(cls) -> LLMConfig:
+        """Load configuration delegating to core application settings."""
+        settings = get_settings()
+        provider = settings.llm_provider.lower()
         if provider not in (PROVIDER_OLLAMA, PROVIDER_CLAUDE):
             provider = DEFAULT_PROVIDER
 
         return cls(
-            provider=provider,  # type: ignore
-            ollama_base_url=os.getenv(
-                ENV_OLLAMA_BASE_URL,
-                DEFAULT_OLLAMA_BASE_URL,
-            ),
-            ollama_model=os.getenv(
-                ENV_OLLAMA_MODEL,
-                DEFAULT_OLLAMA_MODEL,
-            ),
-            claude_model=os.getenv(
-                ENV_CLAUDE_MODEL,
-                DEFAULT_CLAUDE_MODEL,
-            ),
+            provider=provider,  # type: ignore[arg-type]
+            ollama_base_url=settings.ollama_base_url or DEFAULT_OLLAMA_BASE_URL,
+            ollama_model=settings.ollama_model or DEFAULT_OLLAMA_MODEL,
+            claude_model=settings.claude_model or DEFAULT_CLAUDE_MODEL,
         )
 
 
@@ -67,12 +63,17 @@ _config: LLMConfig | None = None
 def get_config() -> LLMConfig:
     """Get the current LLM configuration.
 
-    Returns a singleton instance, loading from environment on first call.
+    Returns a singleton instance, delegating to application settings.
     """
     global _config
     if _config is None:
         _config = LLMConfig.from_env()
     return _config
+
+
+def get_app_settings(**overrides: Any) -> Settings:
+    """Convenience accessor to core application settings."""
+    return get_settings(**overrides)
 
 
 def set_provider(
@@ -90,12 +91,23 @@ def set_provider(
     global _config
     config = get_config()
 
+    ollama_model = model if model and provider == "ollama" else config.ollama_model
+    claude_model = model if model and provider == "claude" else config.claude_model
+
+    # Sync into global settings singleton
+    get_settings(
+        force_reload=True,
+        llm_provider=provider,
+        ollama_model=ollama_model,
+        claude_model=claude_model,
+    )
+
     # Create a new config with updated values
     _config = LLMConfig(
         provider=provider,
         ollama_base_url=config.ollama_base_url,
-        ollama_model=model if model and provider == "ollama" else config.ollama_model,
-        claude_model=model if model and provider == "claude" else config.claude_model,
+        ollama_model=ollama_model,
+        claude_model=claude_model,
     )
 
 

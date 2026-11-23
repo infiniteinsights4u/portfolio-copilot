@@ -18,13 +18,13 @@ def _start_background_loop() -> asyncio.AbstractEventLoop:
     global _loop, _thread
 
     # First check (fast path) - no lock needed if already initialized
-    if _loop is not None and _thread is not None and _thread.is_alive():
+    if _loop is not None and not _loop.is_closed() and _thread is not None and _thread.is_alive():
         return _loop
 
     # Acquire lock for the check-and-create sequence
     with _loop_lock:
         # Double-check after acquiring lock
-        if _loop is not None and _thread is not None and _thread.is_alive():
+        if _loop is not None and not _loop.is_closed() and _thread is not None and _thread.is_alive():
             return _loop
 
         # Create new loop and thread while holding the lock

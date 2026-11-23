@@ -50,6 +50,35 @@ class SessionManager:
             st.session_state.pending_prompt = None
             st.session_state.login_url = None
             st.session_state.checking_login = False
+            st.session_state.pending_approvals = []
+
+    @staticmethod
+    def get_pending_approvals() -> list[dict[str, Any]]:
+        """Get pending GTT approvals waiting for human decision."""
+        return st.session_state.get("pending_approvals", [])
+
+    @staticmethod
+    def add_pending_approval(approval: dict[str, Any]) -> None:
+        """Add a pending GTT approval proposal."""
+        if "pending_approvals" not in st.session_state:
+            st.session_state.pending_approvals = []
+        tid = approval.get("thread_id")
+        if tid and any(a.get("thread_id") == tid for a in st.session_state.pending_approvals):
+            return
+        st.session_state.pending_approvals.append(approval)
+
+    @staticmethod
+    def remove_pending_approval(thread_id: str) -> None:
+        """Remove a pending GTT approval by thread_id."""
+        if "pending_approvals" in st.session_state:
+            st.session_state.pending_approvals = [
+                a for a in st.session_state.pending_approvals if a.get("thread_id") != thread_id
+            ]
+
+    @staticmethod
+    def clear_pending_approvals() -> None:
+        """Clear all pending approvals."""
+        st.session_state.pending_approvals = []
 
     @staticmethod
     def is_logged_in() -> bool:

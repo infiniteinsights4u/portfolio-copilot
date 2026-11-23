@@ -162,3 +162,89 @@ class TestPatternPriority:
         should_use, agent_type = orchestrator.should_use_agent(query)
         assert should_use is True
         assert agent_type == "portfolio_analysis"
+
+
+class TestTechnicalDipPatterns:
+    """Test technical dip agent detection."""
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "Scan for dip setups",
+            "Is INFY dipping?",
+            "check technical dip setup for TCS",
+            "rsi oversold scan",
+            "technical pullback scan",
+        ],
+    )
+    def test_dip_patterns_detected(self, orchestrator, query):
+        should_use, agent_type = orchestrator.should_use_agent(query)
+        assert should_use is True
+        assert agent_type == "technical_dip_scan"
+
+
+class TestBuyDipProposalPatterns:
+    """Test GTT buy proposal agent detection."""
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "propose buy order for RELIANCE",
+            "place GTT for INFY",
+            "create GTT on TCS",
+            "dip buy Tata Motors",
+            "place buy order for HDFCBANK",
+        ],
+    )
+    def test_buy_dip_patterns_detected(self, orchestrator, query):
+        should_use, agent_type = orchestrator.should_use_agent(query)
+        assert should_use is True
+        assert agent_type == "buy_dip_proposal"
+
+
+class TestStopLossReviewPatterns:
+    """Test stop-loss review agent detection."""
+
+    @pytest.mark.parametrize(
+        "query",
+        [
+            "review my stop loss",
+            "check active GTTs",
+            "review active stop loss orders",
+            "trail stop loss on INFY",
+            "show my open gtts",
+        ],
+    )
+    def test_stop_loss_patterns_detected(self, orchestrator, query):
+        should_use, agent_type = orchestrator.should_use_agent(query)
+        assert should_use is True
+        assert agent_type == "stop_loss_review"
+
+
+class TestOrchestratorExecution:
+    """Test full orchestrator execution flow."""
+
+    @pytest.mark.asyncio
+    async def test_orchestrator_dip_to_riskguard_flow(self, orchestrator, tmp_path):
+        """Test Orchestrator -> RiskGuard -> interrupt() pause with zero MCP writes in DRY_RUN=true."""
+        from src.config.settings import get_settings
+
+        # Enforce isolated test DB and DRY_RUN=true via get_settings overrides
+        db_path = tmp_path / "test_orchestrator.db"
+        get_settings(force_reload=True, db_path=db_path, dry_run=True)
+
+        query = "Propose buy dip for INFY"
+        should_use, agent_type = orchestrator.should_use_agent(query)
+        assert should_use is True
+        assert agent_type == "buy_dip_proposal"
+
+        result = await orchestrator.run_agent("buy_dip_proposal", query)
+        assert result["agent_used"] == "GTT Approval Workflow"
+        assert "Stage-1 CNC Buy GTT Proposed" in result["response"]
+        assert "thread_id" in result
+        assert "paused at the Human-in-the-Loop gate" in result["response"]
+
+        # Assert no MCP order writes occurred on mock_client
+        assert not orchestrator._client.place_order.called
+        assert not orchestrator._client.place_gtt_order.called
+

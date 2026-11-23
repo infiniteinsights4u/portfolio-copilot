@@ -1,4 +1,4 @@
-.PHONY: help install dev lint format test clean run web cli ingest ingest-portfolio
+.PHONY: help install dev lint format test clean run web cli ingest ingest-portfolio scheduler backtest failover
 
 # Ensure poetry is in PATH (handles cases where ~/.local/bin isn't in make's PATH)
 export PATH := $(HOME)/.local/bin:$(PATH)
@@ -14,6 +14,9 @@ help:
 	@echo "Run:"
 	@echo "  make cli         Run the CLI interface"
 	@echo "  make web         Run the Streamlit web interface"
+	@echo "  make scheduler   Run the IST positional scheduler daemon"
+	@echo "  make backtest    Run offline EOD dip-investing backtest"
+	@echo "  make failover    Run Kite MCP failover diagnostics/switcher"
 	@echo ""
 	@echo "Development:"
 	@echo "  make lint        Run linter (ruff)"
@@ -54,6 +57,15 @@ cli:
 
 web:
 	PYTHONPATH=$(PWD) poetry run streamlit run src/ui/streamlit_app.py
+
+scheduler:
+	PYTHONPATH=$(PWD) poetry run python -m src.scheduler.scheduler
+
+backtest:
+	PYTHONPATH=$(PWD) poetry run python -m src.backtest.eod_engine
+
+failover:
+	PYTHONPATH=$(PWD) poetry run python scripts/failover_kite_mcp.py
 
 # =============================================================================
 # Development

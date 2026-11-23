@@ -90,6 +90,46 @@ def get_orchestrator(_kite_client: KiteClient) -> AgentOrchestrator:
     return AgentOrchestrator(_kite_client)
 
 
+def _render_pending_approvals(kite_client: KiteClient) -> None:
+    """Render top-level Human-in-the-Loop approval cards for pending GTT proposals."""
+    pending = SessionManager.get_pending_approvals()
+    if not pending:
+        return
+
+    from src.agents.workflows.gtt_approval_workflow import create_gtt_approval_workflow
+    from src.config.settings import get_settings
+    from src.storage.sqlite_checkpointer import DurableSqliteSaver
+    from src.ui.components.approval_drawer import render_approval_drawer
+    from langgraph.types import Command
+
+    st.markdown("### 🔔 Pending GTT Approvals")
+    for item in list(pending):
+        tid = item.get("thread_id", "")
+        payload = item.get("payload", {})
+
+        def on_decision(decision: dict[str, Any]) -> None:
+            settings = get_settings()
+            saver = DurableSqliteSaver(settings.db_path)
+            try:
+                workflow = create_gtt_approval_workflow()
+                graph = workflow.compile(checkpointer=saver)
+                run_async(graph.ainvoke(Command(resume=decision), config={"configurable": {"thread_id": tid}}))
+                SessionManager.remove_pending_approval(tid)
+                st.success(f"GTT decision '{decision.get('action')}' executed successfully.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Failed to process GTT decision: {exc}")
+            finally:
+                saver.close()
+
+        render_approval_drawer(
+            interrupt_payload=payload,
+            on_decision=on_decision,
+            key_prefix=f"app_top_{tid}",
+        )
+    st.markdown("---")
+
+
 def main() -> None:
     """Main entry point for the Streamlit app."""
     # Initialize session state
@@ -107,6 +147,9 @@ def main() -> None:
 
     # Render sidebar
     render_sidebar(kite_client)
+
+    # Top-level HITL approval drawer (surfaces scheduler or chat GTT proposals globally)
+    _render_pending_approvals(kite_client)
 
     # Main content area
     _render_main_content(kite_client, assistant, orchestrator)
