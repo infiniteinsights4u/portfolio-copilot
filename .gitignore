@@ -20,11 +20,12 @@ data/raw/*
 data/processed/*
 data/vector_store/*
 data/*.jsonl
-data/*.db
-data/*.sqlite
+data/*.db*
+data/*.sqlite*
 scratch/
-*.db
-*.sqlite
+*.db*
+*.sqlite*
+*.jsonl
 
 # Notebooks
 .ipynb_checkpoints/

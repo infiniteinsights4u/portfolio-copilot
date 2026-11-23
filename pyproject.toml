@@ -5,7 +5,7 @@ description = "AI-powered portfolio analysis with MCP + RAG + Agents"
 authors = [
     {name = "Mohammad Asif", email = "mohdasif2294@gmail.com"}
 ]
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
@@ -25,7 +25,8 @@ dependencies = [
     "pandas (>=2.0.0,<3.0.0)",
     "watchdog (>=6.0.0,<7.0.0)",
     "langchain-mcp-adapters (>=0.1.0)",
-    "pydantic-settings (>=2.0.0)"
+    "pydantic-settings (>=2.0.0)",
+    "yfinance (>=0.2.36)"
 ]
 
 [tool.poetry]
