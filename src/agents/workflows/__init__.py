@@ -16,6 +16,11 @@ from src.agents.workflows.stock_research import (
     StockResearchAgent,
     run_stock_research,
 )
+from src.agents.workflows.technical_dip_agent import (
+    TechnicalDipState,
+    create_technical_dip_graph,
+    evaluate_technical_dip_node,
+)
 from src.agents.workflows.watchlist_suggestion import (
     WatchlistAgent,
     run_watchlist_suggestion,
@@ -32,4 +37,7 @@ __all__ = [
     "run_market_context",
     "WatchlistAgent",
     "run_watchlist_suggestion",
+    "TechnicalDipState",
+    "create_technical_dip_graph",
+    "evaluate_technical_dip_node",
 ]

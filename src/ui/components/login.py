@@ -1,5 +1,6 @@
-"""Login component for Kite OAuth flow."""
+"""Login component for Kite OAuth flow with session health badge."""
 
+from datetime import datetime, timedelta, timezone
 import streamlit as st
 
 from src.mcp.kite_client import KiteClient
@@ -7,15 +8,46 @@ from src.ui.utils.async_bridge import run_async
 from src.ui.utils.session import SessionManager
 
 
+def get_ist_session_expiry_info() -> tuple[int, int, bool]:
+    """Calculate time remaining until the next 6:00 AM IST token expiration.
+
+    Returns:
+        tuple of (hours_remaining, minutes_remaining, is_expiring_soon)
+    """
+    ist = timezone(timedelta(hours=5, minutes=30))
+    now_ist = datetime.now(ist)
+
+    # Daily Kite token expires at 6:00 AM IST
+    target_today = now_ist.replace(hour=6, minute=0, second=0, microsecond=0)
+    if now_ist >= target_today:
+        next_expiry = target_today + timedelta(days=1)
+    else:
+        next_expiry = target_today
+
+    delta = next_expiry - now_ist
+    total_seconds = int(delta.total_seconds())
+    hours = total_seconds // 3600
+    minutes = (total_seconds % 3600) // 60
+    is_expiring_soon = total_seconds < 3600
+    return hours, minutes, is_expiring_soon
+
+
 def render_login(kite_client: KiteClient) -> None:
-    """Render the login component in the sidebar.
+    """Render the login component in the sidebar with Kite MCP session health badge.
 
     Args:
         kite_client: The Kite MCP client instance
     """
-    st.subheader("Account")
+    st.subheader("Account & MCP Session")
 
     if SessionManager.is_logged_in():
+        # Session health badge
+        hours, minutes, expiring_soon = get_ist_session_expiry_info()
+        if expiring_soon:
+            st.warning(f"🟡 **Session Expiring Soon** ({minutes}m left until 6:00 AM IST)")
+        else:
+            st.caption(f"🟢 **Session Active** • Valid for {hours}h {minutes}m (expires 6:00 AM IST)")
+
         # Show logged-in status
         profile = SessionManager.get_user_profile()
         if profile:
@@ -29,6 +61,8 @@ def render_login(kite_client: KiteClient) -> None:
             SessionManager.set_logged_in(False)
             st.rerun()
     else:
+        st.caption("🔴 **Disconnected** • Manual 2FA required (tokens expire daily at 6:00 AM IST)")
+
         # Show login flow
         login_url = SessionManager.get_login_url()
 

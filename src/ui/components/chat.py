@@ -5,6 +5,7 @@ import streamlit as st
 from src.agents.orchestrator import AgentOrchestrator
 from src.llm.claude import PortfolioAssistant
 from src.mcp.kite_client import AuthenticationError, KiteClient
+from src.ui.components.approval_drawer import render_approval_drawer
 from src.ui.utils.async_bridge import run_async
 from src.ui.utils.session import SessionManager
 
@@ -65,6 +66,31 @@ def render_chat(
     """
     # Display chat history
     _render_chat_history()
+
+    # Check for pending HITL approval
+    pending_hitl = st.session_state.get("pending_hitl")
+    if pending_hitl:
+        def _handle_hitl_decision(decision: dict[str, Any]) -> None:
+            thread_id = pending_hitl.get("thread_id")
+            graph = pending_hitl.get("graph")
+            if graph and thread_id:
+                from langgraph.types import Command
+                with st.spinner("Processing decision..."):
+                    res = run_async(graph.ainvoke(Command(resume=decision), config={"configurable": {"thread_id": thread_id}}))
+                st.session_state["pending_hitl"] = None
+                exec_res = res.get("execution_result")
+                if exec_res and exec_res.success:
+                    st.success(f"{exec_res.action} completed: {exec_res.message}")
+                    SessionManager.add_message("assistant", f"GTT Action Completed: {exec_res.message}")
+                else:
+                    st.info(f"Order status: {res.get('status')}")
+                    SessionManager.add_message("assistant", f"Status: {res.get('status')} - {res.get('error') or ''}")
+                st.rerun()
+
+        render_approval_drawer(
+            interrupt_payload=pending_hitl.get("interrupt_payload", {}),
+            on_decision=_handle_hitl_decision,
+        )
 
     # Check for pending prompt (from suggested prompts click)
     pending_prompt = SessionManager.get_pending_prompt()

@@ -1,7 +1,7 @@
 # Portfolio Copilot
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Ollama](https://img.shields.io/badge/LLM-Ollama-white.svg)](https://ollama.ai/)
 [![Anthropic Claude](https://img.shields.io/badge/LLM-Claude-orange.svg)](https://www.anthropic.com/)
 [![Zerodha Kite](https://img.shields.io/badge/Broker-Zerodha%20Kite-red.svg)](https://kite.zerodha.com/)
@@ -229,6 +229,6 @@ This is a learning project to understand modern AI systems:
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Apache-2.0 License - see [LICENSE](LICENSE) for details.
 
 **Disclaimer:** This tool is for **educational purposes only**. It is NOT investment advice. Always consult a qualified financial advisor before making investment decisions.

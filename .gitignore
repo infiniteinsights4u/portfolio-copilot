@@ -19,6 +19,10 @@ venv/
 data/raw/*
 data/processed/*
 data/vector_store/*
+data/*.jsonl
+data/*.db
+data/*.sqlite
+scratch/
 *.db
 *.sqlite
 
